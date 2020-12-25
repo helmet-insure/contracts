@@ -49,7 +49,7 @@ contract RecruitLP is Configurable {
         //config[_piece_]             = 100 ether;
         //config[_ratio_]             = 2000 ether;
         config[_piece_]             = 0.01 ether;   //100 ether;    //todo: test
-        config[_ratio_]             = 1500000 ether; //150 ether;   //todo: test
+        config[_ratio_]             = 3000000 ether; //300 ether;   //todo: test
         config[_ratioSwap_]         = 0.1 ether;
         config[_close1N_]           = 100;
     }
@@ -190,6 +190,10 @@ contract RecruitLP is Configurable {
         if(value > config[_piece_]) {
             to.transfer(value.sub(config[_piece_]));
             value = config[_piece_];
+        }
+        if(value.add(config[_total_]) > config[_maxValue_]) {
+            to.transfer(value.add(config[_total_]).sub(config[_maxValue_]));
+            value = config[_maxValue_].sub(config[_total_]);
         }
         value1s.push(value);
         //_setConfig(_whitelist_, to, 2);
