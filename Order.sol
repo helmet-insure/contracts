@@ -65,8 +65,8 @@ contract OptionOrder is Configurable, Constants, Constants2 {
         farm    = _farm;
         reward  = _reward;
         config[_ecoAddr_]  = uint(_ecoAddr);
-        config[_ecoRatio_] = 0.1 ether;         // 10%
-        config[_feeRate_]  = 0.1 ether;         // 10%
+        config[_ecoRatio_] = 0.153846153846153846 ether;    //  5% / 32.5% 
+        config[_feeRate_]  = 0.1 ether;                     // 10%
         
 	    //IFarm(farm).crop();                       // just check
 	    IERC20(_reward).totalSupply();           // just check
