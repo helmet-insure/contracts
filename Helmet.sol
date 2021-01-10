@@ -789,9 +789,9 @@ contract Helmet is ERC20UpgradeSafe, Configurable {
 		_setupDecimals(decimals);
 		
 		_mint(locked,   5000_0000 * 10 ** uint256(decimals));       // 50.0%
-		_mint(farm,     3750_0000 * 10 ** uint256(decimals));       // 37.5%
+		_mint(farm,     3250_0000 * 10 ** uint256(decimals));       // 32.5%
 		_mint(eco,       750_0000 * 10 ** uint256(decimals));       //  7.5%
-		_mint(lp,        500_0000 * 10 ** uint256(decimals));       //  5.0%
+		_mint(lp,       1000_0000 * 10 ** uint256(decimals));       // 10.0%
 	}
 
 }
