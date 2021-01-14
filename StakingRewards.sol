@@ -311,8 +311,6 @@ contract StakingPool is Configurable, StakingRewards {
 contract DoublePool is StakingPool {
     IStakingRewards public stakingPool2;
     IERC20 public rewardsToken2;
-    //uint256 public lastUpdateTime2;                                 // obsoleted
-    //uint256 public rewardPerTokenStored2;                           // obsoleted
     mapping(address => uint256) public userRewardPerTokenPaid2;
     mapping(address => uint256) public rewards2;
 
@@ -375,6 +373,98 @@ contract DoublePool is StakingPool {
         if (account != address(0)) {
             rewards2[account] = earned2(account);
             userRewardPerTokenPaid2[account] = rewardPerToken2();
+        }
+        _;
+    }
+
+}
+
+
+interface IMasterChef {
+    function poolInfo(uint pid) external view returns (address lpToken, uint allocPoint, uint lastRewardBlock, uint accCakePerShare);
+    function userInfo(uint pid, address user) external view returns (uint amount, uint rewardDebt);
+    function pendingCake(uint pid, address user) external view returns (uint);
+    function deposit(uint pid, uint amount) external;
+    function withdraw(uint pid, uint amount) external;
+}
+
+contract NestMasterChef is StakingPool {
+    IMasterChef public stakingPool2;
+    IERC20 public rewardsToken2;
+    mapping(address => uint256) public userRewardPerTokenPaid2;
+    mapping(address => uint256) public rewards2;
+    uint public pid2;
+    uint internal _rewardPerToken2;
+
+    function initialize(address, address, address, address) override public {
+        revert();
+    }
+    
+    function initialize(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _stakingPool2, address _rewardsToken2, uint _pid2) public initializer {
+	    super.initialize(_governor, _rewardsDistribution, _rewardsToken, _stakingToken);
+	    
+	    stakingPool2 = IMasterChef(_stakingPool2);
+	    rewardsToken2 = IERC20(_rewardsToken2);
+	    pid2 = _pid2;
+	}
+    
+    function notifyRewardBegin(uint _lep, uint _period, uint _span, uint _begin) virtual override public governance updateReward2(address(0)) {
+        super.notifyRewardBegin(_lep, _period, _span, _begin);
+    }
+    
+    function stake(uint amount) virtual override public updateReward2(msg.sender) {
+        super.stake(amount);
+        stakingToken.safeApprove(address(stakingPool2), amount);
+        stakingPool2.deposit(pid2, amount);
+    }
+
+    function withdraw(uint amount) virtual override public updateReward2(msg.sender) {
+        stakingPool2.withdraw(pid2, amount);
+        super.withdraw(amount);
+    }
+    
+    function getReward2() virtual public nonReentrant updateReward2(msg.sender) {
+        uint256 reward2 = rewards2[msg.sender];
+        if (reward2 > 0) {
+            rewards2[msg.sender] = 0;
+            rewardsToken2.safeTransfer(msg.sender, reward2);
+            emit RewardPaid2(msg.sender, reward2);
+        }
+    }
+    event RewardPaid2(address indexed user, uint256 reward2);
+
+    function getDoubleReward() virtual public {
+        getReward();
+        getReward2();
+    }
+    
+    function exit() override public {
+        super.exit();
+        getReward2();
+    }
+    
+    function rewardPerToken2() virtual public view returns (uint256) {
+        if(_totalSupply == 0)
+            return _rewardPerToken2;
+        else
+            return stakingPool2.pendingCake(pid2, address(this)).mul(1e18).div(_totalSupply).add(_rewardPerToken2);
+    }
+
+    function earned2(address account) virtual public view returns (uint256) {
+        return _balances[account].mul(rewardPerToken2().sub(userRewardPerTokenPaid2[account])).div(1e18).add(rewards2[account]);
+    }
+
+    modifier updateReward2(address account) virtual {
+        if(_totalSupply > 0) {
+            uint delta = rewardsToken2.balanceOf(address(this));
+            stakingPool2.deposit(pid2, 0);
+            delta = rewardsToken2.balanceOf(address(this)).sub(delta);
+            _rewardPerToken2 = delta.mul(1e18).div(_totalSupply).add(_rewardPerToken2);
+        }
+        
+        if (account != address(0)) {
+            rewards2[account] = earned2(account);
+            userRewardPerTokenPaid2[account] = _rewardPerToken2;
         }
         _;
     }
