@@ -728,7 +728,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         _balances[msg.sender] = _balances[msg.sender].add(amount);
 
         // permit
-        IUniswapV2ERC20(address(stakingToken)).permit(msg.sender, address(this), amount, deadline, v, r, s);
+        IPermit(address(stakingToken)).permit(msg.sender, address(this), amount, deadline, v, r, s);
 
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
         emit Staked(msg.sender, amount);
@@ -807,7 +807,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
     event RewardPaid(address indexed user, uint256 reward);
 }
 
-interface IUniswapV2ERC20 {
+interface IPermit {
     function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
 }
 
@@ -828,10 +828,13 @@ contract StakingPool is Configurable, StakingRewards {
     function initialize(address _governor, 
         address _rewardsDistribution,
         address _rewardsToken,
-        address _stakingToken
+        address _stakingToken,
+        address _ecoAddr
     ) public virtual initializer {
 	    super.initialize(_governor);
         super.initialize(_rewardsDistribution, _rewardsToken, _stakingToken);
+        config[_ecoAddr_] = uint(_ecoAddr);
+        config[_ecoRatio_] = 0.1 ether;
     }
 
     function notifyRewardBegin(uint _lep, uint _period, uint _span, uint _begin) virtual public governance updateReward(address(0)) {
@@ -920,12 +923,12 @@ contract DoublePool is StakingPool {
     mapping(address => uint256) public userRewardPerTokenPaid2;
     mapping(address => uint256) public rewards2;
 
-    function initialize(address, address, address, address) override public {
+    function initialize(address, address, address, address, address) override public {
         revert();
     }
     
-    function initialize(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _stakingPool2, address _rewardsToken2) public initializer {
-	    super.initialize(_governor, _rewardsDistribution, _rewardsToken, _stakingToken);
+    function initialize(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _stakingPool2, address _rewardsToken2) public initializer {
+	    super.initialize(_governor, _rewardsDistribution, _rewardsToken, _stakingToken, _ecoAddr);
 	    
 	    stakingPool2 = IStakingRewards(_stakingPool2);
 	    rewardsToken2 = IERC20(_rewardsToken2);
@@ -1002,12 +1005,12 @@ contract NestMasterChef is StakingPool {
     uint public pid2;
     uint internal _rewardPerToken2;
 
-    function initialize(address, address, address, address) override public {
+    function initialize(address, address, address, address, address) override public {
         revert();
     }
     
-    function initialize(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _stakingPool2, address _rewardsToken2, uint _pid2) public initializer {
-	    super.initialize(_governor, _rewardsDistribution, _rewardsToken, _stakingToken);
+    function initialize(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _stakingPool2, address _rewardsToken2, uint _pid2) public initializer {
+	    super.initialize(_governor, _rewardsDistribution, _rewardsToken, _stakingToken, _ecoAddr);
 	    
 	    stakingPool2 = IMasterChef(_stakingPool2);
 	    rewardsToken2 = IERC20(_rewardsToken2);
