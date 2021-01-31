@@ -281,4 +281,8 @@ contract Farm is IFarm, Governable {
         IERC20(crop).safeApprove(pool, amount);
     }
     
+    function approveToken(address token, address pool, uint amount) public governance {
+        IERC20(token).safeApprove(pool, amount);
+    }
+    
 }
