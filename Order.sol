@@ -165,15 +165,14 @@ contract OptionOrder is Configurable, Constants, Constants2 {
             
         amt = vol.mul(asks[askID].price).div(1 ether);
         (address recipient, uint fee) = calcFee(amt);
-        amt = amt.sub(fee);
         address weth = IUniswapV2Router01(OptionFactory(factory).getConfig(_uniswapRounter_)).WETH();
         address settleToken = asks[askID].settleToken;
-        if(settleToken != weth || address(this).balance < amt.add(fee)) {
-            IERC20(settleToken).safeTransferFrom(msg.sender, asks[askID].seller, amt);
+        if(settleToken != weth || address(this).balance < amt) {
+            IERC20(settleToken).safeTransferFrom(msg.sender, asks[askID].seller, amt.sub(fee));
             if(recipient != address(0) && fee > 0)
                 IERC20(settleToken).safeTransferFrom(msg.sender, recipient, fee);
         } else {
-            payable(asks[askID].seller).transfer(amt);
+            payable(asks[askID].seller).transfer(amt.sub(fee));
             if(recipient != address(0) && fee > 0)
                 payable(recipient).transfer(fee);
         }
