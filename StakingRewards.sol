@@ -910,6 +910,25 @@ contract StakingPool is Configurable, StakingRewards {
             emit RewardPaid(msg.sender, reward);
         }
     }
+    
+    function compound() virtual public nonReentrant updateReward(msg.sender) {      // only for pool3
+        require(getConfig(_blocklist_, msg.sender) == 0, 'In blocklist');
+        bool isContract = msg.sender.isContract();
+        require(!isContract || config[_allowContract_] != 0 || getConfig(_allowlist_, msg.sender) != 0, 'No allowContract');
+        require(stakingToken == rewardsToken, 'not pool3');
+
+        uint reward = rewards[msg.sender];
+        if (reward > 0) {
+            rewards[msg.sender] = 0;
+            rewards[address(0)] = rewards[address(0)].sub0(reward);
+            rewardsToken.safeTransferFrom(rewardsDistribution, address(this), reward);
+            emit RewardPaid(msg.sender, reward);
+            
+            _totalSupply = _totalSupply.add(reward);
+            _balances[msg.sender] = _balances[msg.sender].add(reward);
+            emit Staked(msg.sender, reward);
+        }
+    }
 
     function getRewardForDuration() override external view returns (uint256) {
         return rewardsToken.allowance(rewardsDistribution, address(this)).sub0(rewards[address(0)]);
