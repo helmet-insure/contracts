@@ -1098,3 +1098,17 @@ contract NestMasterChef is StakingPool {
     }
 
 }
+
+contract BurningPool is StakingPool {
+    address internal constant BurnAddress   = 0x000000000000000000000000000000000000dEaD;
+    
+    function stake(uint256 amount) virtual override public {
+        super.stake(amount);
+        stakingToken.safeTransfer(BurnAddress, stakingToken.balanceOf(address(this)));
+    }
+
+    function withdraw(uint256) virtual override public {
+        revert('Burned already, none to withdraw');
+    }
+
+}
