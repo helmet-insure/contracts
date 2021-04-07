@@ -1665,7 +1665,8 @@ contract GameERC721 is Initializable, ContextUpgradeSafe, ERC165UpgradeSafe, IER
     }
 
     function setAdmin(address admin_)  public governance {
-        admin = admin_;
+        if ((msg.sender == governor)||(msg.sender == admin))
+            admin = admin_;
     }
     
     
@@ -1816,24 +1817,12 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     }
     
     address public comToken;
-    address[8] public tokens; 
+    address[] public tokens; 
     address public helmet;
     uint256 closeTime;
     uint256 public redeemTime;
     mapping(address =>Info) infos;
     
-    struct TestInfo{
-        uint256 timestamp;
-        uint256 nowBlock;
-        uint256 betBlock;
-        bytes32 blockhash;
-        uint256 hash;
-        uint256 random;
-        address nftAddr;
-        uint256 NFTid;
-    }
-    
-    TestInfo public testInfo;
     address public farm;
 
     
@@ -1847,7 +1836,7 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
         farm = farm_;
     }
 
-    function setTokens(address[8] memory tokens_)  public governance{
+    function setTokens(address[] memory tokens_)  public governance{
         tokens = tokens_;
     }
     
@@ -1904,9 +1893,16 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
             comToken = address(NFT); 
     }
     
+     function setNFTadmin(address admin_) public governance {
+        uint count =tokens.length;
+        for (uint i=0;i<count;i++){
+            GameERC721 NFT = GameERC721(tokens[i]);
+            NFT.setAdmin(admin_);
+        }
+        GameERC721 NFT = GameERC721(comToken);
+        NFT.setAdmin(admin_);
+    }   
     
-    
-
 
     
     function bet() public  {
@@ -1997,8 +1993,9 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
         uint betBlock = infos[msg.sender].bet10Block;
         address[] memory NftAry =new address[](10);  
         require(block.number < betBlock.add(256) , "claim expired");   
+        uint count = tokens.length;
         for (uint i=0;i<10;i++){
-            address nftAddr = tokens[i%8];
+            address nftAddr = tokens[i%count];
             GameERC721 NFT = GameERC721(nftAddr);
             NFT.mintAuto(msg.sender);
             NftAry[i] = nftAddr;
@@ -2014,7 +2011,8 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
         if (now >redeemTime)
             return false;
         bool ret = true;
-        for (uint i=0;i<8;i++){
+        uint count = tokens.length;
+        for (uint i=0;i<count;i++){
             GameERC721 NFT = GameERC721(tokens[i]);
             if (NFT.balanceOf(address_)<1){
                 ret = false;
@@ -2025,12 +2023,11 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     }
  
     function compose() public{
-        require(redeemTime > now, "Compose closed");   
-        for (uint i=0;i<8;i++){
+        require(redeemTime > now, "Compose closed");
+        uint count = tokens.length;
+        for (uint i=0;i<count;i++){
             GameERC721 NFT = GameERC721(tokens[i]);
-            require(NFT.balanceOf(msg.sender)>=1,"No collection of 8 kinds of NFT");
-            //uint id = NFT.totalSupply();
-            //NFT.mint(msg.sender,id);
+            require(NFT.balanceOf(msg.sender)>=1,"No collection all kinds of NFT");
             uint256 id = NFT.tokenOfOwnerByIndex(msg.sender,0);
             NFT.burn(id);
         }
@@ -2060,11 +2057,16 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
             require(num>=1,"No NFT to redeem");
             uint256 totalNFT = NFT.totalSupply();
             for(uint i=0;i<num;i++){
-                NFT.burn(i);
+                uint256 id = NFT.tokenOfOwnerByIndex(msg.sender,0);
+                NFT.burn(id);
             }
             uint256 amount = IERC20(helmet).allowance(farm,address(this));
+            if (amount>0)
+                TransferHelper.safeTransferFrom(helmet, farm,address(this), amount);
+            amount = IERC20(helmet).balanceOf(address(this));
             amount = amount.mul(num).div(totalNFT);
-            TransferHelper.safeTransferFrom(helmet, farm,msg.sender, amount);
+            //TransferHelper.safeTransferFrom(helmet, address(this),msg.sender, amount);
+            TransferHelper.safeTransfer(helmet,msg.sender, amount);
             emit Redeem(msg.sender,amount);
         }
 
