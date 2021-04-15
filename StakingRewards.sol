@@ -520,7 +520,7 @@ contract Governable is Initializable {
      * @dev Contract initializer.
      * called once by the factory at time of deployment
      */
-    function initialize(address governor_) virtual public initializer {
+    function __Governable_init_unchained(address governor_) virtual public initializer {
         governor = governor_;
         emit GovernorshipTransferred(address(0), governor);
     }
@@ -568,10 +568,10 @@ contract Configurable is Governable {
     function getConfig(bytes32 key) public view returns (uint) {
         return config[key];
     }
-    function getConfig(bytes32 key, uint index) public view returns (uint) {
+    function getConfigI(bytes32 key, uint index) public view returns (uint) {
         return config[bytes32(uint(key) ^ index)];
     }
-    function getConfig(bytes32 key, address addr) public view returns (uint) {
+    function getConfigA(bytes32 key, address addr) public view returns (uint) {
         return config[bytes32(uint(key) ^ uint(addr))];
     }
 
@@ -589,10 +589,10 @@ contract Configurable is Governable {
     function setConfig(bytes32 key, uint value) external governance {
         _setConfig(key, value);
     }
-    function setConfig(bytes32 key, uint index, uint value) external governance {
+    function setConfigI(bytes32 key, uint index, uint value) external governance {
         _setConfig(bytes32(uint(key) ^ index), value);
     }
-    function setConfig(bytes32 key, address addr, uint value) public governance {
+    function setConfigA(bytes32 key, address addr, uint value) public governance {
         _setConfig(bytes32(uint(key) ^ uint(addr)), value);
     }
 }
@@ -603,8 +603,12 @@ contract RewardsDistributor is Configurable {
 
     address public rewardsToken;
 	
-    function initialize(address governor, address _rewardsToken) public initializer {
-        super.initialize(governor);
+    function __RewardsDistributor_init(address governor, address _rewardsToken) public initializer {
+        __Governable_init_unchained(governor);
+        __RewardsDistributor_init_unchained(_rewardsToken);
+    }
+    
+    function __RewardsDistributor_init_unchained(address _rewardsToken) public governance {
         rewardsToken = _rewardsToken;
     }
     
@@ -677,12 +681,20 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
     /* ========== CONSTRUCTOR ========== */
 
     //constructor(
-    function initialize(
+    function __StakingRewards_init(
         address _rewardsDistribution,
         address _rewardsToken,
         address _stakingToken
-    ) public virtual initializer {
-        super.__ReentrancyGuard_init();
+    ) public initializer {
+        __ReentrancyGuard_init_unchained();
+        __StakingRewards_init_unchained(_rewardsDistribution, _rewardsToken, _stakingToken);
+    }
+
+    function __StakingRewards_init_unchained(
+        address _rewardsDistribution,
+        address _rewardsToken,
+        address _stakingToken
+    ) public initializer {
         rewardsToken = IERC20(_rewardsToken);
         stakingToken = IERC20(_stakingToken);
         rewardsDistribution = _rewardsDistribution;
@@ -825,14 +837,19 @@ contract StakingPool is Configurable, StakingRewards {
 	uint public period;
 	uint public begin;
 
-    function initialize(address _governor, 
+    function __StakingPool_init(address _governor, 
         address _rewardsDistribution,
         address _rewardsToken,
         address _stakingToken,
         address _ecoAddr
-    ) public virtual initializer {
-	    super.initialize(_governor);
-        super.initialize(_rewardsDistribution, _rewardsToken, _stakingToken);
+    ) public initializer {
+	    __Governable_init_unchained(_governor);
+        __ReentrancyGuard_init_unchained();
+        __StakingRewards_init_unchained(_rewardsDistribution, _rewardsToken, _stakingToken);
+        __StakingPool_init_unchained(_ecoAddr);
+    }
+
+    function __StakingPool_init_unchained(address _ecoAddr) public governance {
         config[_ecoAddr_] = uint(_ecoAddr);
         config[_ecoRatio_] = 0.181818181818181818 ether;
     }
@@ -898,9 +915,9 @@ contract StakingPool is Configurable, StakingRewards {
     }
 
     function getReward() override public nonReentrant updateReward(msg.sender) {
-        require(getConfig(_blocklist_, msg.sender) == 0, 'In blocklist');
+        require(getConfigA(_blocklist_, msg.sender) == 0, 'In blocklist');
         bool isContract = msg.sender.isContract();
-        require(!isContract || config[_allowContract_] != 0 || getConfig(_allowlist_, msg.sender) != 0, 'No allowContract');
+        require(!isContract || config[_allowContract_] != 0 || getConfigA(_allowlist_, msg.sender) != 0, 'No allowContract');
 
         uint256 reward = rewards[msg.sender];
         if (reward > 0) {
@@ -912,9 +929,9 @@ contract StakingPool is Configurable, StakingRewards {
     }
     
     function compound() virtual public nonReentrant updateReward(msg.sender) {      // only for pool3
-        require(getConfig(_blocklist_, msg.sender) == 0, 'In blocklist');
+        require(getConfigA(_blocklist_, msg.sender) == 0, 'In blocklist');
         bool isContract = msg.sender.isContract();
-        require(!isContract || config[_allowContract_] != 0 || getConfig(_allowlist_, msg.sender) != 0, 'No allowContract');
+        require(!isContract || config[_allowContract_] != 0 || getConfigA(_allowlist_, msg.sender) != 0, 'No allowContract');
         require(stakingToken == rewardsToken, 'not pool3');
 
         uint reward = rewards[msg.sender];
@@ -942,13 +959,15 @@ contract DoublePool is StakingPool {
     mapping(address => uint256) public userRewardPerTokenPaid2;
     mapping(address => uint256) public rewards2;
 
-    function initialize(address, address, address, address, address) override public {
-        revert();
-    }
+    function __DoublePool_init(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _stakingPool2, address _rewardsToken2) public initializer {
+	    __Governable_init_unchained(_governor);
+        __ReentrancyGuard_init_unchained();
+        __StakingRewards_init_unchained(_rewardsDistribution, _rewardsToken, _stakingToken);
+        __StakingPool_init_unchained(_ecoAddr);
+	    __DoublePool_init_unchained(_stakingPool2, _rewardsToken2);
+	}
     
-    function initialize(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _stakingPool2, address _rewardsToken2) public initializer {
-	    super.initialize(_governor, _rewardsDistribution, _rewardsToken, _stakingToken, _ecoAddr);
-	    
+    function __DoublePool_init_unchained(address _stakingPool2, address _rewardsToken2) public governance {
 	    stakingPool2 = IStakingRewards(_stakingPool2);
 	    rewardsToken2 = IERC20(_rewardsToken2);
 	}
@@ -1011,12 +1030,15 @@ contract DoublePool is StakingPool {
 interface IMasterChef {
     function poolInfo(uint pid) external view returns (address lpToken, uint allocPoint, uint lastRewardBlock, uint accCakePerShare);
     function userInfo(uint pid, address user) external view returns (uint amount, uint rewardDebt);
+    function pending(uint pid, address user) external view returns (uint);
     function pendingCake(uint pid, address user) external view returns (uint);
     function deposit(uint pid, uint amount) external;
     function withdraw(uint pid, uint amount) external;
 }
 
 contract NestMasterChef is StakingPool {
+    IERC20 internal constant Cake = IERC20(0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82);
+    
     IMasterChef public stakingPool2;
     IERC20 public rewardsToken2;
     mapping(address => uint256) public userRewardPerTokenPaid2;
@@ -1024,25 +1046,33 @@ contract NestMasterChef is StakingPool {
     uint public pid2;
     uint internal _rewardPerToken2;
 
-    function initialize(address, address, address, address, address) virtual override public {
-        revert();
-    }
-    
-    function initialize(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _stakingPool2, address _rewardsToken2, uint _pid2) public initializer {
-	    super.initialize(_governor, _rewardsDistribution, _rewardsToken, _stakingToken, _ecoAddr);
-	    
+    function __NestMasterChef_init(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _stakingPool2, address _rewardsToken2, uint _pid2) public initializer {
+	    __Governable_init_unchained(_governor);
+        __ReentrancyGuard_init_unchained();
+        __StakingRewards_init_unchained(_rewardsDistribution, _rewardsToken, _stakingToken);
+        __StakingPool_init_unchained(_ecoAddr);
+        __NestMasterChef_init_unchained(_stakingPool2, _rewardsToken2, _pid2);
+	}
+
+    function __NestMasterChef_init_unchained(address _stakingPool2, address _rewardsToken2, uint _pid2) public governance {
 	    stakingPool2 = IMasterChef(_stakingPool2);
 	    rewardsToken2 = IERC20(_rewardsToken2);
 	    pid2 = _pid2;
-	}
+    }
     
     function notifyRewardBegin(uint _lep, uint _period, uint _span, uint _begin) virtual override public governance updateReward2(address(0)) {
         super.notifyRewardBegin(_lep, _period, _span, _begin);
     }
     
+    function migrate() virtual public governance updateReward2(address(0)) {
+        uint total = stakingToken.balanceOf(address(this));
+        stakingToken.approve(address(stakingPool2), total);
+        stakingPool2.deposit(pid2, total);
+    }        
+    
     function stake(uint amount) virtual override public updateReward2(msg.sender) {
         super.stake(amount);
-        stakingToken.safeApprove(address(stakingPool2), amount);
+        stakingToken.approve(address(stakingPool2), amount);
         stakingPool2.deposit(pid2, amount);
     }
 
@@ -1074,8 +1104,10 @@ contract NestMasterChef is StakingPool {
     function rewardPerToken2() virtual public view returns (uint256) {
         if(_totalSupply == 0)
             return _rewardPerToken2;
-        else
+        else if(rewardsToken2 == Cake)
             return stakingPool2.pendingCake(pid2, address(this)).mul(1e18).div(_totalSupply).add(_rewardPerToken2);
+        else
+            return stakingPool2.pending(pid2, address(this)).mul(1e18).div(_totalSupply).add(_rewardPerToken2);
     }
 
     function earned2(address account) virtual public view returns (uint256) {
@@ -1216,9 +1248,9 @@ contract IioPool is StakingPool {
     }
     
     function getReward3() virtual public nonReentrant updateReward3(msg.sender) {
-        require(getConfig(_blocklist_, msg.sender) == 0, 'In blocklist');
+        require(getConfigA(_blocklist_, msg.sender) == 0, 'In blocklist');
         bool isContract = msg.sender.isContract();
-        require(!isContract || config[_allowContract_] != 0 || getConfig(_allowlist_, msg.sender) != 0, 'No allowContract');
+        require(!isContract || config[_allowContract_] != 0 || getConfigA(_allowlist_, msg.sender) != 0, 'No allowContract');
 
         IERC20 rewardsToken3_ = rewardsToken3;                                          // save gas
         require(now >= claimTime3[rewardsToken3_], "it's not time yet");
@@ -1236,10 +1268,6 @@ contract IioPool is StakingPool {
 }
 
 contract NestMasterChefIio is NestMasterChef, IioPool {
-    function initialize(address, address, address, address, address) virtual override(StakingPool, NestMasterChef) public {
-        revert();
-    }
-    
     function notifyRewardBegin(uint _lep, uint _period, uint _span, uint _begin) virtual override(StakingPool, NestMasterChef) public {
         NestMasterChef.notifyRewardBegin(_lep, _period, _span, _begin);
     }
@@ -1273,4 +1301,29 @@ contract BurningPool is StakingPool {
         revert('Burned already, none to withdraw');
     }
 
+}
+
+
+contract Mine is Governable {
+    using SafeERC20 for IERC20;
+
+    address public reward;
+
+    function __Mine_init(address governor, address reward_) public initializer {
+        __Governable_init_unchained(governor);
+        __Mine_init_unchained(reward_);
+    }
+    
+    function __Mine_init_unchained(address reward_) public governance {
+        reward = reward_;
+    }
+    
+    function approvePool(address pool, uint amount) public governance {
+        IERC20(reward).safeApprove(pool, amount);
+    }
+    
+    function approveToken(address token, address pool, uint amount) public governance {
+        IERC20(token).safeApprove(pool, amount);
+    }
+    
 }
