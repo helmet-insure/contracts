@@ -1208,6 +1208,8 @@ contract IioPool is StakingPool {
     }
 
     function earned3(address account) virtual public view returns (uint) {
+        if(!applied3[rewardsToken3][account])
+            return 0;
         return _balances[account].mul(rewardPerToken3().sub(userRewardPerTokenPaid3[rewardsToken3][account])).div(1e18).add(rewards3[rewardsToken3][account]);
     }
 
