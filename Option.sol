@@ -1453,6 +1453,7 @@ contract Constants {
 contract OptionFactory is Configurable, Constants {
     using SafeERC20 for IERC20;
     using SafeMath for uint;
+    using HiLo for uint;
 
     mapping(bytes32 => address) public productImplementations;
     mapping(address => mapping(address => mapping(address => mapping(uint => mapping(uint => address))))) public longs;
@@ -1479,11 +1480,22 @@ contract OptionFactory is Configurable, Constants {
         productImplementations[_ShortOption_] = _implShortOption;
     }
     
+    function pack_maturity_expiry(uint maturity, uint expiry) public pure returns (uint) {
+        return maturity.pack(expiry);
+    }
+    function unpack_maturity(uint maturity_expiry) public pure returns (uint) {
+        return maturity_expiry.hi();
+    }
+    function unpack_expiry(uint maturity_expiry) public pure returns (uint) {
+        return maturity_expiry.lo();
+    }
+    
     function createOption(bool _private, address _collateral, address _underlying, uint _strikePrice, uint _expiry) public returns (address long, address short) {
         require(_collateral != _underlying, 'IDENTICAL_ADDRESSES');
         require(_collateral != address(0) && _underlying != address(0), 'ZERO_ADDRESS');
         require(_strikePrice != 0, 'ZERO_STRIKE_PRICE');
-        require(_expiry > now, 'Cannot create an expired option');
+        require(_expiry.hi() < _expiry.lo(), 'maturity must be before expiry');
+        require(_expiry.lo() > now, 'Cannot create an expired option');
 
         address creator = _private ? tx.origin : address(0);
         require(longs[creator][_collateral][_underlying][_strikePrice][_expiry] == address(0), 'SHORT_PROXY_EXISTS');     // single check is sufficient
@@ -1510,22 +1522,30 @@ contract OptionFactory is Configurable, Constants {
     }
     event OptionCreated(address indexed creator, address indexed _collateral, address indexed _underlying, uint _strikePrice, uint _expiry, address long, address short, uint count);
     
-    function mint(bool _private, address _collateral, address _underlying, uint _strikePrice, uint _expiry, uint volume) public returns (address long, address short, uint vol) {
-        require(config[_mintOnlyBy_] == 0 || address(config[_mintOnlyBy_]) == msg.sender, 'mint denied');
+    function _mint(address sender, bool _private, address _collateral, address _underlying, uint _strikePrice, uint _expiry, uint volume) internal returns (address long, address short, uint vol) {
+        require(config[_mintOnlyBy_] == 0 || address(config[_mintOnlyBy_]) == sender, 'mint denied');
         address creator = _private ? tx.origin : address(0);
         long  = longs [creator][_collateral][_underlying][_strikePrice][_expiry];
         short = shorts[creator][_collateral][_underlying][_strikePrice][_expiry];
         if(short == address(0))                                                                      // single check is sufficient
             (long, short) = createOption(_private, _collateral, _underlying, _strikePrice, _expiry);
         
-        IERC20(_collateral).safeTransferFrom(msg.sender, short, volume);
-        ShortOption(short).mint_(msg.sender, volume);
-        LongOption(long).mint_(msg.sender, volume);
+        IERC20(_collateral).safeTransferFrom(sender, short, volume);
+        ShortOption(short).mint_(sender, volume);
+        LongOption(long).mint_(sender, volume);
         vol = volume;
         
-        emit Mint(msg.sender, _private, _collateral, _underlying, _strikePrice, _expiry, long, short, vol);
+        emit Mint(sender, _private, _collateral, _underlying, _strikePrice, _expiry, long, short, vol);
     }
     event Mint(address indexed seller, bool _private, address indexed _collateral, address indexed _underlying, uint _strikePrice, uint _expiry, address long, address short, uint vol);
+
+    function mint_(address sender, bool _private, address _collateral, address _underlying, uint _strikePrice, uint _expiry, uint volume) public governance returns (address long, address short, uint vol) {
+        return _mint(sender, _private, _collateral, _underlying, _strikePrice, _expiry, volume);
+    }
+    
+    function mint(bool _private, address _collateral, address _underlying, uint _strikePrice, uint _expiry, uint volume) public returns (address long, address short, uint vol) {
+        return _mint(msg.sender, _private, _collateral, _underlying, _strikePrice, _expiry, volume);
+    }
     
     function mint(address longOrShort, uint volume) external returns (address, address, uint) {
         LongOption long = LongOption(longOrShort);
@@ -1558,7 +1578,8 @@ contract OptionFactory is Configurable, Constants {
     }
     
     function _exercise(address buyer, address _creator, address _collateral, address _underlying, uint _strikePrice, uint _expiry, uint volume, address[] memory path) internal returns (uint vol, uint fee, uint amt) {
-        require(now <= _expiry, 'Expired');
+        require(_expiry.hi() <= now, 'Immature');
+        require(now <= _expiry.lo(), 'Expired');
         
         address long  = longs[_creator][_collateral][_underlying][_strikePrice][_expiry];
         LongOption(long).burn_(buyer, volume);
@@ -1623,6 +1644,9 @@ contract OptionFactory is Configurable, Constants {
     function settle(address _creator, address _collateral, address _underlying, uint _strikePrice, uint _expiry, uint volume) external returns (uint vol, uint col, uint fee, uint und) {
         address short = shorts[_creator][_collateral][_underlying][_strikePrice][_expiry];
         return settle(short, volume);
+    }
+    function settle_(address sender, address short, uint volume) public governance returns (uint vol, uint col, uint fee, uint und) {
+        return ShortOption(short).settle_(sender, volume);
     }
     function settle(address short, uint volume) public returns (uint vol, uint col, uint fee, uint und) {
         return ShortOption(short).settle_(msg.sender, volume);
@@ -1727,6 +1751,7 @@ contract LongOption is ERC20UpgradeSafe {
 contract ShortOption is ERC20UpgradeSafe, Constants {
     using SafeERC20 for IERC20;
     using SafeMath for uint;
+    using HiLo for uint;
     
     address public factory;
     address public creator;
@@ -1808,7 +1833,7 @@ contract ShortOption is ERC20UpgradeSafe, Constants {
     function settleable(uint volume) public view returns (uint vol, uint col, uint fee, uint und) {
         uint colla = IERC20(collateral).balanceOf(address(this));
         uint under = IERC20(underlying).balanceOf(address(this));
-        if(now <= expiry) {
+        if(now <= expiry.lo()) {
             address long  = OptionFactory(factory).longs(creator, collateral, underlying, strikePrice, expiry);
             uint waived = colla.sub(IERC20(long).totalSupply());
             uint exercised = totalSupply().sub(colla);
@@ -1842,5 +1867,21 @@ contract ShortOption is ERC20UpgradeSafe, Constants {
     
     function settle() external returns (uint vol, uint col, uint fee, uint und) {
         return _settle(msg.sender, balanceOf(msg.sender));
+    }
+}
+
+
+library HiLo {
+    function pack(uint hi, uint lo) internal pure returns (uint) {
+        require(hi < 2**128 && lo < 2**128, 'UintHiLo.pack overflow');
+        return hi << 128 | lo;
+    }
+    
+    function hi(uint u) internal pure returns (uint) {
+        return u >> 128;
+    }
+    
+    function lo(uint u) internal pure returns (uint) {
+        return uint128(u);
     }
 }
