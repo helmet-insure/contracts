@@ -724,7 +724,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
             );
     }
 
-    function earned(address account) override public view returns (uint256) {
+    function earned(address account) virtual override public view returns (uint256) {
         return _balances[account].mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(rewards[account]);
     }
 
@@ -866,7 +866,7 @@ contract StakingPool is Configurable, StakingRewards {
         if(begin == 0 || begin >= now || lastUpdateTime >= now)
             return 0;
             
-        amt = rewardsToken.allowance(rewardsDistribution, address(this)).sub0(rewards[address(0)]);
+        amt = Math.min(rewardsToken.allowance(rewardsDistribution, address(this)), rewardsToken.balanceOf(rewardsDistribution)).sub0(rewards[address(0)]);
         
         // calc rewardDelta in period
         if(lep == 3) {                                                              // power
@@ -893,6 +893,10 @@ contract StakingPool is Configurable, StakingRewards {
             );
     }
 
+    function earned(address account) virtual override public view returns (uint256) {
+        return Math.min(Math.min(super.earned(account), rewardsToken.allowance(rewardsDistribution, address(this))), rewardsToken.balanceOf(rewardsDistribution));
+    }
+
     modifier updateReward(address account) override {
         rewardPerTokenStored = rewardPerToken();
         rewards[address(0)] = rewards[address(0)].add(rewardDelta());
@@ -902,7 +906,7 @@ contract StakingPool is Configurable, StakingRewards {
             rewards[account] = earned(account);
             userRewardPerTokenPaid[account] = rewardPerTokenStored;
 
-            amt = rewards[account].sub(amt);
+            amt = rewards[account].sub0(amt);
             address addr = address(config[_ecoAddr_]);
             uint ratio = config[_ecoRatio_];
             if(addr != address(0) && ratio != 0) {
@@ -1321,11 +1325,11 @@ contract Mine is Governable {
     }
     
     function approvePool(address pool, uint amount) public governance {
-        IERC20(reward).safeApprove(pool, amount);
+        IERC20(reward).approve(pool, amount);
     }
     
     function approveToken(address token, address pool, uint amount) public governance {
-        IERC20(token).safeApprove(pool, amount);
+        IERC20(token).approve(pool, amount);
     }
     
 }
