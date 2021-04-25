@@ -909,7 +909,7 @@ contract StakingPool is Configurable, StakingRewards {
             amt = rewards[account].sub0(amt);
             address addr = address(config[_ecoAddr_]);
             uint ratio = config[_ecoRatio_];
-            if(addr != address(0) && ratio != 0) {
+            if(addr != address(0) && addr != account && ratio != 0) {
                 uint a = amt.mul(ratio).div(1 ether);
                 rewards[addr] = rewards[addr].add(a);
                 rewards[address(0)] = rewards[address(0)].add(a);
@@ -1192,12 +1192,12 @@ contract IioPool is StakingPool {
         if(begin3[rewardsToken3_] == 0 || begin3[rewardsToken3_] >= now || lastUpdateTime3_ >= now)
             return 0;
             
-        amt = rewardsToken3_.allowance(rewardsDistribution, address(this)).sub0(rewards3[rewardsToken3_][address(0)]);
+        amt = Math.min(rewardsToken3_.allowance(rewardsDistribution, address(this)), rewardsToken3_.balanceOf(rewardsDistribution)).sub0(rewards3[rewardsToken3_][address(0)]);
         
         uint end3_ = end3[rewardsToken3_];                                              // save gas
         if(now < end3_)
             amt = amt.mul(now.sub(lastUpdateTime3_)).div(end3_.sub(lastUpdateTime3_));
-        else if(lastUpdateTime3 >= end3_)
+        else if(lastUpdateTime3_ >= end3_)
             amt = 0;
     }
     
@@ -1214,23 +1214,26 @@ contract IioPool is StakingPool {
     function earned3(address account) virtual public view returns (uint) {
         if(!applied3[rewardsToken3][account])
             return 0;
-        return _balances[account].mul(rewardPerToken3().sub(userRewardPerTokenPaid3[rewardsToken3][account])).div(1e18).add(rewards3[rewardsToken3][account]);
+        return Math.min(rewardsToken3.balanceOf(rewardsDistribution), _balances[account].mul(rewardPerToken3().sub(userRewardPerTokenPaid3[rewardsToken3][account])).div(1e18).add(rewards3[rewardsToken3][account]));
     }
 
     modifier updateReward3(address account) virtual {
         IERC20 rewardsToken3_ = rewardsToken3;                                          // save gas
-        _rewardPerToken3[rewardsToken3_] = rewardPerToken3();
-        rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(rewardDelta3());
-        lastUpdateTime3 = Math.max(begin3[rewardsToken3_], Math.min(now, end3[rewardsToken3_]));
-        if (account != address(0)) {
+        bool applied3_ = applied3[rewardsToken3_][account];                             // save gas
+        if(account == address(0) || applied3_) {
+            _rewardPerToken3[rewardsToken3_] = rewardPerToken3();
+            rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(rewardDelta3());
+            lastUpdateTime3 = Math.max(begin3[rewardsToken3_], Math.min(now, end3[rewardsToken3_]));
+        }
+        if (account != address(0) && applied3_) {
             uint amt = rewards3[rewardsToken3_][account];
             rewards3[rewardsToken3_][account] = earned3(account);
             userRewardPerTokenPaid3[rewardsToken3_][account] = _rewardPerToken3[rewardsToken3_];
 
-            amt = rewards3[rewardsToken3_][account].sub(amt);
+            amt = rewards3[rewardsToken3_][account].sub0(amt);
             address addr = address(config[_ecoAddr_]);
             uint ratio = config[_ecoRatio_];
-            if(addr != address(0) && ratio != 0) {
+            if(addr != address(0) && addr != account && ratio != 0) {
                 uint a = amt.mul(ratio).div(1 ether);
                 rewards3[rewardsToken3_][addr] = rewards3[rewardsToken3_][addr].add(a);
                 rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(a);
@@ -1283,6 +1286,208 @@ contract NestMasterChefIio is NestMasterChef, IioPool {
     }
 
     function withdraw(uint amount) virtual override(NestMasterChef, IioPool) public {
+        super.withdraw(amount);
+    }
+    
+    function exit() virtual override(StakingRewards, NestMasterChef) public {
+        NestMasterChef.exit();
+    }
+    
+    
+    uint[50] private __gap;
+}
+    
+
+contract IioPoolV2 is StakingPool {         // support multi IIO at the same time
+    address internal constant HelmetAddress = 0x948d2a81086A075b3130BAc19e4c6DEe1D2E3fE8;
+    address internal constant BurnAddress   = 0x000000000000000000000000000000000000dEaD;
+
+    uint private __lastUpdateTime3;                             // obsolete
+    IERC20 private __rewardsToken3;                             // obsolete
+    mapping(IERC20 => uint) public totalSupply3;                                    // rewardsToken3 => totalSupply3
+    mapping(IERC20 => uint) internal _rewardPerToken3;                              // rewardsToken3 => _rewardPerToken3
+    mapping(IERC20 => uint) public begin3;                                          // rewardsToken3 => begin3
+    mapping(IERC20 => uint) public end3;                                            // rewardsToken3 => end3
+    mapping(IERC20 => uint) public claimTime3;                                      // rewardsToken3 => claimTime3
+    mapping(IERC20 => uint) public ticketVol3;                                      // rewardsToken3 => ticketVol3
+    mapping(IERC20 => IERC20)  public ticketToken3;                                 // rewardsToken3 => ticketToken3
+    mapping(IERC20 => address) public ticketRecipient3;                             // rewardsToken3 => ticketRecipient3
+
+    mapping(IERC20 => mapping(address => bool)) public applied3;                    // rewardsToken3 => acct => applied3
+    mapping(IERC20 => mapping(address => uint)) public userRewardPerTokenPaid3;     // rewardsToken3 => acct => paid3
+    mapping(IERC20 => mapping(address => uint)) public rewards3;                    // rewardsToken3 => acct => rewards3
+    
+    mapping(IERC20 => uint) public lastUpdateTime3;                                 // rewardsToken3 => lastUpdateTime3
+    IERC20[] public all;                                                            // all rewardsToken3
+    IERC20[] public active;                                                         // active rewardsToken3
+    
+    function setReward3BurnHelmet(IERC20 rewardsToken3_, uint begin3_, uint end3_, uint claimTime3_, uint ticketVol3_) virtual external {
+        setReward3(rewardsToken3_, begin3_, end3_, claimTime3_, ticketVol3_, IERC20(HelmetAddress), BurnAddress);
+    }
+    function setReward3(IERC20 rewardsToken3_, uint begin3_, uint end3_, uint claimTime3_, uint ticketVol3_, IERC20 ticketToken3_, address ticketRecipient3_) virtual public governance {
+        lastUpdateTime3     [rewardsToken3_]= begin3_;
+        //rewardsToken3       = rewardsToken3_;
+        begin3              [rewardsToken3_] = begin3_;
+        end3                [rewardsToken3_] = end3_;
+        claimTime3          [rewardsToken3_] = claimTime3_;
+        ticketVol3          [rewardsToken3_] = ticketVol3_;
+        ticketToken3        [rewardsToken3_] = ticketToken3_;
+        ticketRecipient3    [rewardsToken3_] = ticketRecipient3_;
+        
+        uint i=0;
+        for(; i<all.length; i++)
+            if(all[i] == rewardsToken3_)
+                break;
+        if(i>=all.length)
+            all.push(rewardsToken3_);
+            
+        i=0;
+        for(; i<active.length; i++)
+            if(active[i] == rewardsToken3_)
+                break;
+        if(i>=active.length)
+            active.push(rewardsToken3_);
+            
+        emit SetReward3(rewardsToken3_, begin3_, end3_, claimTime3_, ticketVol3_, ticketToken3_, ticketRecipient3_);
+    }
+    event SetReward3(IERC20 indexed rewardsToken3_, uint begin3_, uint end3_, uint claimTime3_, uint ticketVol3_, IERC20 indexed ticketToken3_, address indexed ticketRecipient3_);
+    
+    function deactive(IERC20 rewardsToken3_) virtual public governance {
+        for(uint i=0; i<active.length; i++)
+            if(active[i] == rewardsToken3_) {
+                active[i] = active[active.length-1];
+                active.pop();
+                emit Deactive(rewardsToken3_);
+                return;
+            }
+        revert('not found active rewardsToken3_');
+    }
+    event Deactive(IERC20 indexed rewardsToken3_);
+
+    function applyReward3(IERC20 rewardsToken3_) virtual public updateReward3(rewardsToken3_, msg.sender) {
+        //IERC20 rewardsToken3_ = rewardsToken3;                                          // save gas
+        require(!applied3[rewardsToken3_][msg.sender], 'applied already');
+        require(now < end3[rewardsToken3_], 'expired');
+        
+        IERC20 ticketToken3_ = ticketToken3[rewardsToken3_];                            // save gas
+        if(address(ticketToken3_) != address(0))
+            ticketToken3_.safeTransferFrom(msg.sender, ticketRecipient3[rewardsToken3_], ticketVol3[rewardsToken3_]);
+        applied3[rewardsToken3_][msg.sender] = true;
+        userRewardPerTokenPaid3[rewardsToken3_][msg.sender] = _rewardPerToken3[rewardsToken3_];
+        totalSupply3[rewardsToken3_] = totalSupply3[rewardsToken3_].add(_balances[msg.sender]);
+        emit ApplyReward3(msg.sender, rewardsToken3_);
+    }
+    event ApplyReward3(address indexed acct, IERC20 indexed rewardsToken3);
+    
+    function rewardDelta3(IERC20 rewardsToken3_) virtual public view returns (uint amt) {
+        //IERC20 rewardsToken3_ = rewardsToken3;                                          // save gas
+        uint lastUpdateTime3_ = lastUpdateTime3[rewardsToken3_];                        // save gas
+        if(begin3[rewardsToken3_] == 0 || begin3[rewardsToken3_] >= now || lastUpdateTime3_ >= now)
+            return 0;
+            
+        amt = Math.min(rewardsToken3_.allowance(rewardsDistribution, address(this)), rewardsToken3_.balanceOf(rewardsDistribution)).sub0(rewards3[rewardsToken3_][address(0)]);
+        
+        uint end3_ = end3[rewardsToken3_];                                              // save gas
+        if(now < end3_)
+            amt = amt.mul(now.sub(lastUpdateTime3_)).div(end3_.sub(lastUpdateTime3_));
+        else if(lastUpdateTime3_ >= end3_)
+            amt = 0;
+    }
+    
+    function rewardPerToken3(IERC20 rewardsToken3_) virtual public view returns (uint) {
+        if (totalSupply3[rewardsToken3_] == 0) {
+            return _rewardPerToken3[rewardsToken3_];
+        }
+        return
+            _rewardPerToken3[rewardsToken3_].add(
+                rewardDelta3(rewardsToken3_).mul(1e18).div(totalSupply3[rewardsToken3_])
+            );
+    }
+
+    function earned3(IERC20 rewardsToken3_, address account) virtual public view returns (uint) {
+        if(!applied3[rewardsToken3_][account])
+            return 0;
+        return Math.min(rewardsToken3_.balanceOf(rewardsDistribution), _balances[account].mul(rewardPerToken3(rewardsToken3_).sub(userRewardPerTokenPaid3[rewardsToken3_][account])).div(1e18).add(rewards3[rewardsToken3_][account]));
+    }
+
+    function _updateReward3(IERC20 rewardsToken3_, address account) virtual internal {
+        bool applied3_ = applied3[rewardsToken3_][account];                             // save gas
+        if(account == address(0) || applied3_) {
+            _rewardPerToken3[rewardsToken3_] = rewardPerToken3(rewardsToken3_);
+            rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(rewardDelta3(rewardsToken3_));
+            lastUpdateTime3[rewardsToken3_] = Math.max(begin3[rewardsToken3_], Math.min(now, end3[rewardsToken3_]));
+        }
+        if (account != address(0) && applied3_) {
+            uint amt = rewards3[rewardsToken3_][account];
+            rewards3[rewardsToken3_][account] = earned3(rewardsToken3_, account);
+            userRewardPerTokenPaid3[rewardsToken3_][account] = _rewardPerToken3[rewardsToken3_];
+
+            amt = rewards3[rewardsToken3_][account].sub0(amt);
+            address addr = address(config[_ecoAddr_]);
+            uint ratio = config[_ecoRatio_];
+            if(addr != address(0) && addr != account && ratio != 0) {
+                uint a = amt.mul(ratio).div(1 ether);
+                rewards3[rewardsToken3_][addr] = rewards3[rewardsToken3_][addr].add(a);
+                rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(a);
+            }
+        }
+    }
+    
+    modifier updateReward3(IERC20 rewardsToken3_, address account) virtual {
+        _updateReward3(rewardsToken3_, account);
+        _;
+    }
+
+    function stake(uint amount) virtual override public {
+        super.stake(amount);
+        for(uint i=0; i<active.length; i++) {
+            IERC20 rewardsToken3_ = active[i];                                          // save gas
+            _updateReward3(rewardsToken3_, msg.sender);
+            if(applied3[rewardsToken3_][msg.sender])
+                totalSupply3[rewardsToken3_] = totalSupply3[rewardsToken3_].add(amount);
+        }    
+    }
+
+    function withdraw(uint amount) virtual override public {
+        for(uint i=0; i<active.length; i++) {
+            IERC20 rewardsToken3_ = active[i];                                          // save gas
+            _updateReward3(rewardsToken3_, msg.sender);
+            if(applied3[rewardsToken3_][msg.sender])
+                totalSupply3[rewardsToken3_] = totalSupply3[rewardsToken3_].sub(amount);
+        }
+        super.withdraw(amount);
+    }
+    
+    function getReward3(IERC20 rewardsToken3_) virtual public nonReentrant updateReward3(rewardsToken3_, msg.sender) {
+        require(getConfigA(_blocklist_, msg.sender) == 0, 'In blocklist');
+        bool isContract = msg.sender.isContract();
+        require(!isContract || config[_allowContract_] != 0 || getConfigA(_allowlist_, msg.sender) != 0, 'No allowContract');
+
+        //IERC20 rewardsToken3_ = rewardsToken3;                                          // save gas
+        require(now >= claimTime3[rewardsToken3_], "it's not time yet");
+        uint256 reward3 = rewards3[rewardsToken3_][msg.sender];
+        if (reward3 > 0) {
+            rewards3[rewardsToken3_][msg.sender] = 0;
+            rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].sub0(reward3);
+            rewardsToken3_.safeTransferFrom(rewardsDistribution, msg.sender, reward3);
+            emit RewardPaid3(msg.sender, rewardsToken3_, reward3);
+        }
+    }
+    event RewardPaid3(address indexed user, IERC20 indexed rewardsToken3_, uint256 reward3);
+    
+    uint[47] private __gap;
+}
+
+contract NestMasterChefIioV2 is NestMasterChef, IioPoolV2 {
+    function notifyRewardBegin(uint _lep, uint _period, uint _span, uint _begin) virtual override(StakingPool, NestMasterChef) public {
+        NestMasterChef.notifyRewardBegin(_lep, _period, _span, _begin);
+    }
+    
+    function stake(uint amount) virtual override(NestMasterChef, IioPoolV2) public {
+        super.stake(amount);
+    }
+
+    function withdraw(uint amount) virtual override(NestMasterChef, IioPoolV2) public {
         super.withdraw(amount);
     }
     
