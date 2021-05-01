@@ -1664,7 +1664,7 @@ contract GameERC721 is Initializable, ContextUpgradeSafe, ERC165UpgradeSafe, IER
         admin = admin_;
     }
 
-    function setAdmin(address admin_)  public governance {
+    function setAdmin(address admin_)  public {
         if ((msg.sender == governor)||(msg.sender == admin))
             admin = admin_;
     }
@@ -1859,41 +1859,7 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     }
     
 
-    
-    function testCreateNFT() public governance {
-        uint index=100;
-        for (uint i=0;i<8;i++){
-            if (tokens[i]==address(0)){ 
-                index = i;
-                break;
-            }
-        }
-        GameERC721 NFT = new GameERC721();
-        if (index==0)
-            NFT.__GameERC721_init(governor,"NFT0","NFT0",address(this));
-        else if (index==1)
-            NFT.__GameERC721_init(governor,"NFT1","NFT1",address(this));
-        else if (index==2)
-            NFT.__GameERC721_init(governor,"NFT2","NFT2",address(this));
-        else if (index==3)
-            NFT.__GameERC721_init(governor,"NFT3","NFT3",address(this));
-        else if (index==4)
-            NFT.__GameERC721_init(governor,"NFT4","NFT4",address(this));
-        else if (index==5)
-            NFT.__GameERC721_init(governor,"NFT5","NFT5",address(this));
-        else if (index==6)
-            NFT.__GameERC721_init(governor,"NFT6","NFT6",address(this));
-        else if (index==7)
-            NFT.__GameERC721_init(governor,"NFT7","NFT7",address(this));
-        else if (index==100)
-            NFT.__GameERC721_init(governor,"comNFT","NCom",address(this));
-        if (index<8)
-            tokens[index] = address(NFT);
-        else
-            comToken = address(NFT); 
-    }
-    
-     function setNFTadmin(address admin_) public governance {
+    function setNFTadmin(address admin_) public governance {
         uint count =tokens.length;
         for (uint i=0;i<count;i++){
             GameERC721 NFT = GameERC721(tokens[i]);
@@ -1988,25 +1954,7 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
         return NftAry;
     }
     
-    function claim10Test() public returns(address[] memory){
-        require(redeemTime > now, "claim10 closed");   
-        uint betBlock = infos[msg.sender].bet10Block;
-        address[] memory NftAry =new address[](10);  
-        require(block.number < betBlock.add(256) , "claim expired");   
-        uint count = tokens.length;
-        for (uint i=0;i<10;i++){
-            address nftAddr = tokens[i%count];
-            GameERC721 NFT = GameERC721(nftAddr);
-            NFT.mintAuto(msg.sender);
-            NftAry[i] = nftAddr;
-        } 
-        infos[msg.sender].bet10Block = 0;
-        emit Claim10(msg.sender,NftAry);
-        return NftAry;
-    }
-    
-    
-    
+
    function composeEnable(address address_) public view  returns (bool){
         if (now >redeemTime)
             return false;
@@ -2052,6 +2000,7 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     
     
     function redeem() public{
+            require(redeemTime < now, "it's not redeem time yet");   
             GameERC721 NFT = GameERC721(comToken);
             uint256 num = NFT.balanceOf(msg.sender);
             require(num>=1,"No NFT to redeem");
