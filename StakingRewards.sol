@@ -881,6 +881,9 @@ contract StakingPool is Configurable, StakingRewards {
             amt = amt.mul(now.sub(lastUpdateTime)).div(periodFinish.sub(lastUpdateTime));
         else if(lastUpdateTime >= periodFinish)
             amt = 0;
+            
+        if(config[_ecoAddr_] != 0)
+            amt = amt.mul(uint(1e18).sub(config[_ecoRatio_])).div(1 ether);
     }
     
     function rewardPerToken() override public view returns (uint256) {
@@ -899,21 +902,21 @@ contract StakingPool is Configurable, StakingRewards {
 
     modifier updateReward(address account) override {
         rewardPerTokenStored = rewardPerToken();
-        rewards[address(0)] = rewards[address(0)].add(rewardDelta());
-        lastUpdateTime = now;
-        if (account != address(0)) {
-            uint amt = rewards[account];
-            rewards[account] = earned(account);
-            userRewardPerTokenPaid[account] = rewardPerTokenStored;
-
-            amt = rewards[account].sub0(amt);
+        uint delta = rewardDelta();
+        {
             address addr = address(config[_ecoAddr_]);
             uint ratio = config[_ecoRatio_];
-            if(addr != address(0) && addr != account && ratio != 0) {
-                uint a = amt.mul(ratio).div(1 ether);
-                rewards[addr] = rewards[addr].add(a);
-                rewards[address(0)] = rewards[address(0)].add(a);
+            if(addr != address(0) && ratio != 0) {
+                uint d = delta.mul(ratio).div(uint(1e18).sub(ratio));
+                rewards[addr] = rewards[addr].add(d);
+                delta = delta.add(d);
             }
+        }
+        rewards[address(0)] = rewards[address(0)].add(delta);
+        lastUpdateTime = now;
+        if (account != address(0)) {
+            rewards[account] = earned(account);
+            userRewardPerTokenPaid[account] = rewardPerTokenStored;
         }
         _;
     }
@@ -1392,6 +1395,9 @@ contract IioPoolV2 is StakingPool {         // support multi IIO at the same tim
             amt = amt.mul(now.sub(lastUpdateTime3_)).div(end3_.sub(lastUpdateTime3_));
         else if(lastUpdateTime3_ >= end3_)
             amt = 0;
+            
+        if(config[_ecoAddr_] != 0)
+            amt = amt.mul(uint(1e18).sub(config[_ecoRatio_])).div(1 ether);
     }
     
     function rewardPerToken3(IERC20 rewardsToken3_) virtual public view returns (uint) {
@@ -1414,22 +1420,22 @@ contract IioPoolV2 is StakingPool {         // support multi IIO at the same tim
         bool applied3_ = applied3[rewardsToken3_][account];                             // save gas
         if(account == address(0) || applied3_) {
             _rewardPerToken3[rewardsToken3_] = rewardPerToken3(rewardsToken3_);
-            rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(rewardDelta3(rewardsToken3_));
+            uint delta = rewardDelta3(rewardsToken3_);
+            {
+                address addr = address(config[_ecoAddr_]);
+                uint ratio = config[_ecoRatio_];
+                if(addr != address(0) && ratio != 0) {
+                    uint d = delta.mul(ratio).div(uint(1e18).sub(ratio));
+                    rewards3[rewardsToken3_][addr] = rewards3[rewardsToken3_][addr].add(d);
+                    delta = delta.add(d);
+                }
+            }
+            rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(delta);
             lastUpdateTime3[rewardsToken3_] = Math.max(begin3[rewardsToken3_], Math.min(now, end3[rewardsToken3_]));
         }
         if (account != address(0) && applied3_) {
-            uint amt = rewards3[rewardsToken3_][account];
             rewards3[rewardsToken3_][account] = earned3(rewardsToken3_, account);
             userRewardPerTokenPaid3[rewardsToken3_][account] = _rewardPerToken3[rewardsToken3_];
-
-            amt = rewards3[rewardsToken3_][account].sub0(amt);
-            address addr = address(config[_ecoAddr_]);
-            uint ratio = config[_ecoRatio_];
-            if(addr != address(0) && addr != account && ratio != 0) {
-                uint a = amt.mul(ratio).div(1 ether);
-                rewards3[rewardsToken3_][addr] = rewards3[rewardsToken3_][addr].add(a);
-                rewards3[rewardsToken3_][address(0)] = rewards3[rewardsToken3_][address(0)].add(a);
-            }
         }
     }
     
