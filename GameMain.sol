@@ -1825,7 +1825,12 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     
     address public farm;
 
-    
+    uint256 public betCost; 
+    uint256 public bet10Cost; 
+    uint256 public usersCount;
+    uint256 public totalBet;
+    uint256 public totalBet10;
+
    function __GameMain_init(address governor_,address farm_) external initializer {
 		__Governable_init_unchained(governor_);
         __Context_init_unchained();
@@ -1834,6 +1839,8 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
 
     function __GameMain_init_unchained(address farm_)  public governance{
         farm = farm_;
+        betCost = 2e18;
+        bet10Cost = 16e18;
     }
 
     function setTokens(address[] memory tokens_)  public governance{
@@ -1857,6 +1864,11 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     function setRedeemTime(uint256 _redeemTime) public governance{
         redeemTime = _redeemTime;
     }
+
+    function setBetCost(uint256 _betCost,uint256 _bet10Cost) public governance{
+        betCost = _betCost;
+        bet10Cost = _bet10Cost;
+    }
     
 
     function setNFTadmin(address admin_) public governance {
@@ -1874,7 +1886,10 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     function bet() public  {
         require(redeemTime > now, "bet closed");   
         require(!needClaim(msg.sender),"claim first");
-        TransferHelper.safeTransferFrom(helmet, msg.sender, address(this), 1e18);
+        TransferHelper.safeTransferFrom(helmet, msg.sender, address(this), betCost);
+        totalBet += 1;
+        if (infos[msg.sender].betNum==0&&infos[msg.sender].bet10Num==0)
+            usersCount += 1;
         infos[msg.sender].betBlock = block.number; 
         infos[msg.sender].betNum = infos[msg.sender].betNum + 1;
         emit Bet(msg.sender);
@@ -1883,7 +1898,10 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     function bet10() public {
         require(redeemTime > now, "bet closed");   
         require(!needClaim10(msg.sender),"claim10 first");
-        TransferHelper.safeTransferFrom(helmet, msg.sender, address(this), 8e18);
+        TransferHelper.safeTransferFrom(helmet, msg.sender, address(this), bet10Cost);
+        totalBet10 += 1;
+        if (infos[msg.sender].betNum==0&&infos[msg.sender].bet10Num==0)
+            usersCount += 1;
         infos[msg.sender].bet10Block = block.number; 
         infos[msg.sender].bet10Num = infos[msg.sender].bet10Num + 1;
         emit Bet10(msg.sender);
@@ -2022,6 +2040,8 @@ contract GameMain is Governable,ContextUpgradeSafe,IERC721Receiver {
     function onERC721Received(address, address, uint256, bytes calldata) external override returns (bytes4) {
         return this.onERC721Received.selector;
     }
+    
+    
 
 
 }
