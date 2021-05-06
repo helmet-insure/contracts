@@ -647,6 +647,70 @@ interface IStakingRewards {
     function exit() external;
 }
 
+
+abstract contract DodoPool {
+    using SafeMath for uint256;
+    
+    struct RewardTokenInfo {
+        address rewardToken;
+        uint256 startBlock;
+        uint256 endBlock;
+        address rewardVault;
+        uint256 rewardPerBlock;
+        uint256 accRewardPerShare;
+        uint256 lastRewardBlock;
+        mapping(address => uint256) userRewardPerSharePaid;
+        mapping(address => uint256) userRewards;
+    }
+
+    RewardTokenInfo[] public rewardTokenInfos;
+
+
+    function getPendingReward(address user, uint256 i) external view virtual returns (uint256); 
+
+    function getPendingRewardByToken(address user, address rewardToken) external view virtual returns (uint256);
+
+    function totalSupply() public view virtual returns (uint256);
+
+    function balanceOf(address user) public view virtual returns (uint256);
+
+    function getRewardTokenById(uint256 i) external view virtual returns (address);
+    function getIdByRewardToken(address rewardToken) external view virtual returns(uint256);
+    function getRewardNum() external view virtual returns(uint256);
+    
+    // ============ Claim ============
+    function deposit(uint256 amount) external virtual;
+    function withdraw(uint256 amount) external virtual;
+
+    function claimReward(uint256 i) external virtual;
+    function claimAllRewards() external virtual;
+
+
+	
+	function _getUnrewardBlockNum(uint256 i) internal view returns (uint256) {
+        RewardTokenInfo memory rt = rewardTokenInfos[i];
+        if (block.number < rt.startBlock || rt.lastRewardBlock > rt.endBlock) {
+            return 0;
+        }
+        uint256 start = rt.lastRewardBlock < rt.startBlock ? rt.startBlock : rt.lastRewardBlock;
+        uint256 end = rt.endBlock < block.number ? rt.endBlock : block.number;
+        return end.sub(start);
+    }
+
+    function getAccRewardPerShare(uint256 i) external view returns (uint256) {
+        RewardTokenInfo memory rt = rewardTokenInfos[i];
+       if (totalSupply() == 0) {
+            return rt.accRewardPerShare;
+        }
+        return rt.accRewardPerShare.add(divFloor(_getUnrewardBlockNum(i).mul(rt.rewardPerBlock), totalSupply()));
+    }
+    
+    function divFloor(uint256 target, uint256 d) internal pure returns (uint256) {
+        return target.mul(10**18).div(d);
+    }
+
+}
+
 abstract contract RewardsDistributionRecipient {
     address public rewardsDistribution;
 
@@ -1031,6 +1095,80 @@ contract DoublePool is StakingPool {
         _;
     }
 
+}
+
+
+contract DoublePoolDodo is StakingPool {
+	
+    DodoPool public dodoPool2;
+    IERC20 public rewardsToken2;
+    mapping(address => uint256) public userRewardPerTokenPaid2;
+    mapping(address => uint256) public rewards2;
+
+    function __DoublePool_init(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _dodoPool2, address _rewardsToken2) public initializer {
+	    __Governable_init_unchained(_governor);
+        __ReentrancyGuard_init_unchained();
+        __StakingRewards_init_unchained(_rewardsDistribution, _rewardsToken, _stakingToken);
+        __StakingPool_init_unchained(_ecoAddr);
+	    __DoublePool_init_unchained(_dodoPool2, _rewardsToken2);
+	}
+    
+    function __DoublePool_init_unchained(address _dodoPool2, address _rewardsToken2) public governance {
+	    dodoPool2 = DodoPool(_dodoPool2);
+	    rewardsToken2 = IERC20(_rewardsToken2);
+	}
+    
+    function notifyRewardBegin(uint _lep, uint _period, uint _span, uint _begin) virtual override public governance updateReward2(address(0)){
+        super.notifyRewardBegin(_lep, _period, _span, _begin);
+    }
+    
+    function stake(uint amount) virtual override public updateReward2(msg.sender) {
+        super.stake(amount);
+        stakingToken.safeApprove(address(dodoPool2), amount);
+        dodoPool2.deposit(amount);
+    }
+
+    function withdraw(uint amount) virtual override public updateReward2(msg.sender) {
+        dodoPool2.withdraw(amount);
+        super.withdraw(amount);
+    }
+    
+    function getReward2() virtual public nonReentrant updateReward2(msg.sender) {
+        uint256 reward2 = rewards2[msg.sender];
+		if(reward2>0){
+            rewards2[msg.sender] = 0;
+		    dodoPool2.claimReward(0);
+			rewardsToken2.safeTransfer(msg.sender, reward2);
+            emit RewardPaid2(msg.sender, reward2);
+		}
+    }
+    event RewardPaid2(address indexed user, uint256 reward2);
+
+    function getDoubleReward() virtual public {
+        getReward();
+        getReward2();
+    }
+    
+    function exit() override public {
+        super.exit();
+        getReward2();
+    }
+    
+    function rewardPerToken2() virtual public view returns (uint256) {
+        return dodoPool2.getAccRewardPerShare(0);
+    }
+
+    function earned2(address account) virtual public view returns (uint256) {
+        return dodoPool2.getPendingReward(account,0);
+    }
+
+    modifier updateReward2(address account) virtual {
+        if (account != address(0)) {
+            rewards2[account] = earned2(account);
+            userRewardPerTokenPaid2[account] = rewardPerToken2();
+        }
+        _;
+    }
 }
 
 
