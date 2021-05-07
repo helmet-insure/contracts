@@ -1159,7 +1159,7 @@ contract DoublePoolDodo is StakingPool {
     }
 
     function earned2(address account) virtual public view returns (uint256) {
-        return dodoPool2.getPendingReward(account,0);
+        return _balances[account].mul(rewardPerToken2().sub(userRewardPerTokenPaid2[account])).div(1e18).add(rewards2[account]);
     }
 
     modifier updateReward2(address account) virtual {
