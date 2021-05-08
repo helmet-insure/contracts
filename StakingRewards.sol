@@ -664,6 +664,8 @@ abstract contract DodoPool {
     }
 
     RewardTokenInfo[] public rewardTokenInfos;
+    
+    //function rewardTokenInfos(uint256 i) public view returns(RewardTokenInfo memory);
 
 
     function getPendingReward(address user, uint256 i) external view virtual returns (uint256); 
@@ -687,27 +689,6 @@ abstract contract DodoPool {
 
 
 	
-	function _getUnrewardBlockNum(uint256 i) internal view returns (uint256) {
-        RewardTokenInfo memory rt = rewardTokenInfos[i];
-        if (block.number < rt.startBlock || rt.lastRewardBlock > rt.endBlock) {
-            return 0;
-        }
-        uint256 start = rt.lastRewardBlock < rt.startBlock ? rt.startBlock : rt.lastRewardBlock;
-        uint256 end = rt.endBlock < block.number ? rt.endBlock : block.number;
-        return end.sub(start);
-    }
-
-    function getAccRewardPerShare(uint256 i) external view returns (uint256) {
-        RewardTokenInfo memory rt = rewardTokenInfos[i];
-       if (totalSupply() == 0) {
-            return rt.accRewardPerShare;
-        }
-        return rt.accRewardPerShare.add(divFloor(_getUnrewardBlockNum(i).mul(rt.rewardPerBlock), totalSupply()));
-    }
-    
-    function divFloor(uint256 target, uint256 d) internal pure returns (uint256) {
-        return target.mul(10**18).div(d);
-    }
 
 }
 
@@ -1099,11 +1080,14 @@ contract DoublePool is StakingPool {
 
 
 contract DoublePoolDodo is StakingPool {
-	
+
+    using SafeMath for uint256;
+
     DodoPool public dodoPool2;
     IERC20 public rewardsToken2;
     mapping(address => uint256) public userRewardPerTokenPaid2;
     mapping(address => uint256) public rewards2;
+    uint internal _rewardPerToken2;
 
     function __DoublePool_init(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _dodoPool2, address _rewardsToken2) public initializer {
 	    __Governable_init_unchained(_governor);
@@ -1154,8 +1138,11 @@ contract DoublePoolDodo is StakingPool {
         getReward2();
     }
     
+
     function rewardPerToken2() virtual public view returns (uint256) {
-        return dodoPool2.getAccRewardPerShare(0);
+        if(_totalSupply == 0)
+            return _rewardPerToken2;
+        return dodoPool2.getPendingReward(address(this),0).mul(1e18).div(_totalSupply).add(_rewardPerToken2);
     }
 
     function earned2(address account) virtual public view returns (uint256) {
@@ -1163,9 +1150,16 @@ contract DoublePoolDodo is StakingPool {
     }
 
     modifier updateReward2(address account) virtual {
+        if(_totalSupply > 0) {
+            uint delta = rewardsToken2.balanceOf(address(this));
+            dodoPool2.deposit(0);
+            delta = rewardsToken2.balanceOf(address(this)).sub(delta);
+            _rewardPerToken2 = delta.mul(1e18).div(_totalSupply).add(_rewardPerToken2);
+        }
+        
         if (account != address(0)) {
             rewards2[account] = earned2(account);
-            userRewardPerTokenPaid2[account] = rewardPerToken2();
+            userRewardPerTokenPaid2[account] = _rewardPerToken2;
         }
         _;
     }
