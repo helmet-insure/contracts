@@ -1087,15 +1087,10 @@ contract DoublePoolDodo is StakingPool {
         mapping(address => uint256) userRewards;
     }
 
-    //RewardTokenInfo[] public rewardTokenInfos;
-    
-
-
     DodoPool public dodoPool2;
     IERC20 public rewardsToken2;
     mapping(address => uint256) public userRewardPerTokenPaid2;
     mapping(address => uint256) public rewards2;
-//uint internal _rewardPerToken2;
 
     function __DoublePool_init(address _governor, address _rewardsDistribution, address _rewardsToken, address _stakingToken, address _ecoAddr, address _dodoPool2, address _rewardsToken2) public initializer {
 	    __Governable_init_unchained(_governor);
@@ -1165,48 +1160,6 @@ contract DoublePoolDodo is StakingPool {
     }
 
 
- /*   function rewardPerToken2() virtual public view returns (uint256) {
-        if(_totalSupply == 0)
-            return _rewardPerToken2;
-        return dodoPool2.getPendingReward(address(this),0).mul(1e18).div(_totalSupply).add(_rewardPerToken2);
-    }
-
-    function earned2(address account) virtual public view returns (uint256) {
-        return _balances[account].mul(rewardPerToken2().sub(userRewardPerTokenPaid2[account])).div(1e18).add(rewards2[account]);
-    }
-
-    modifier updateReward2(address account) virtual {
-        if(_totalSupply > 0) {
-            uint delta = rewardsToken2.balanceOf(address(this));
-            dodoPool2.deposit(0);
-            delta = rewardsToken2.balanceOf(address(this)).sub(delta);
-            _rewardPerToken2 = delta.mul(1e18).div(_totalSupply).add(_rewardPerToken2);
-        }
-        
-        if (account != address(0)) {
-            rewards2[account] = earned2(account);
-            userRewardPerTokenPaid2[account] = _rewardPerToken2;
-        }
-        _;
-    }*/
-
-/*
-    struct RewardTokenInfo {
-        address rewardToken;
-        uint256 startBlock;
-        uint256 endBlock;
-        address rewardVault;
-        uint256 rewardPerBlock;
-        uint256 accRewardPerShare;
-        uint256 lastRewardBlock;
-        mapping(address => uint256) userRewardPerSharePaid;
-        mapping(address => uint256) userRewards;
-    }
-
-*/
-
-
-    
     function _getUnrewardBlockNum(uint256 i) internal view returns (uint256) {
         RewardTokenInfo memory rt;
         (rt.rewardToken,rt.startBlock,rt.endBlock,rt.rewardVault,rt.rewardPerBlock,rt.accRewardPerShare,rt.lastRewardBlock) = dodoPool2.rewardTokenInfos(i);
