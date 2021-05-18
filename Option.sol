@@ -1705,11 +1705,13 @@ contract LongOption is ERC20UpgradeSafe {
         return('Helmet.Insure Long Option Token', 'Long');
     }
     
-    function setNameAndSymbol(string memory name, string memory symbol) external {
+    function setErc20Param(string memory name, string memory symbol, uint8 decimals) external {
         require(msg.sender == OptionFactory(factory).governor());
         _name = name;
         _symbol = symbol;
+        _decimals = decimals;
     }
+
 
     modifier onlyFactory {
         require(msg.sender == factory, 'Only Factory');
@@ -1779,10 +1781,11 @@ contract ShortOption is ERC20UpgradeSafe, Constants {
         return('Helmet.Insure Short Option Token', 'Short');
     }
 
-    function setNameAndSymbol(string memory name, string memory symbol) external {
+    function setErc20Param(string memory name, string memory symbol, uint8 decimals) external {
         require(msg.sender == OptionFactory(factory).governor());
         _name = name;
         _symbol = symbol;
+        _decimals = decimals;
     }
 
     modifier onlyFactory {
