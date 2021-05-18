@@ -1676,6 +1676,59 @@ contract BurningPool is StakingPool {
 }
 
 
+contract AirPool is StakingPool {
+    function __AirPool_init(address _governor, 
+        address _rewardsDistribution,
+        address _rewardsToken
+    ) public initializer {
+	    __Governable_init_unchained(_governor);
+        __ReentrancyGuard_init_unchained();
+        __StakingRewards_init_unchained(_rewardsDistribution, _rewardsToken, address(0));
+        __StakingPool_init_unchained(address(0));
+        __AirPool_init_unchained();
+    }
+
+    function __AirPool_init_unchained() public governance {
+    }
+
+    function stake(uint256) virtual override public {
+        revert('Air Claim, none to stake');
+    }
+
+    function withdraw(uint256) virtual override public {
+        revert('Air Claim, none to withdraw');
+    }
+    
+    function setQuota(address acct, uint amt) virtual external updateReward(address(0)) governance {
+        _totalSupply = _totalSupply.add(amt).sub(_balances[acct]);
+        _balances[acct] = amt;
+        emit SetQuota(acct, amt);
+    }
+    event SetQuota(address acct, uint amt);
+
+    function setQuotaN(address[] calldata accts, uint amt) virtual external updateReward(address(0)) governance {
+        uint total = _totalSupply;
+        for(uint i=0; i<accts.length; i++) {
+            total = total.add(amt).sub(_balances[accts[i]]);
+            _balances[accts[i]] = amt;
+        }
+        _totalSupply = total;
+    }
+    
+    
+    function setQuotaNN(address[] calldata accts, uint[] calldata amts) virtual external updateReward(address(0)) governance {
+        require(accts.length == amts.length, 'accts.length != amts.length');
+        uint total = _totalSupply;
+        for(uint i=0; i<accts.length; i++) {
+            total = total.add(amts[i]).sub(_balances[accts[i]]);
+            _balances[accts[i]] = amts[i];
+        }
+        _totalSupply = total;
+    }
+    
+}
+
+
 contract Mine is Governable {
     using SafeERC20 for IERC20;
 
