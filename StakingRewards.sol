@@ -1597,7 +1597,10 @@ contract IioPoolV2 is StakingPool {         // support multi IIO at the same tim
     modifier updateReward3(IERC20 rewardsToken3_, address account) virtual {
         _updateReward3(rewardsToken3_, account);
         _;
+        emit TotalSupply3(rewardsToken3_,totalSupply3[rewardsToken3_]);
     }
+    event TotalSupply3(IERC20 indexed rewardsToken3_, uint totalSupply3);
+
 
     function stake(uint amount) virtual override public {
         super.stake(amount);
