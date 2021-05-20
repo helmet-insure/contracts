@@ -1459,6 +1459,7 @@ contract NestMasterChefIio is NestMasterChef, IioPool {
 contract IioPoolV2 is StakingPool {         // support multi IIO at the same time
     address internal constant HelmetAddress = 0x948d2a81086A075b3130BAc19e4c6DEe1D2E3fE8;
     address internal constant BurnAddress   = 0x000000000000000000000000000000000000dEaD;
+    bytes32 internal constant _ecoRatio3_   = 'ecoRatio3';
 
     uint private __lastUpdateTime3;                             // obsolete
     IERC20 private __rewardsToken3;                             // obsolete
@@ -1491,6 +1492,7 @@ contract IioPoolV2 is StakingPool {         // support multi IIO at the same tim
         ticketVol3          [rewardsToken3_] = ticketVol3_;
         ticketToken3        [rewardsToken3_] = ticketToken3_;
         ticketRecipient3    [rewardsToken3_] = ticketRecipient3_;
+        _setConfig(_ecoRatio3_, address(rewardsToken3_), 0.10 ether);
         
         uint i=0;
         for(; i<all.length; i++)
@@ -1552,7 +1554,7 @@ contract IioPoolV2 is StakingPool {         // support multi IIO at the same tim
             amt = 0;
             
         if(config[_ecoAddr_] != 0)
-            amt = amt.mul(uint(1e18).sub(config[_ecoRatio_])).div(1 ether);
+            amt = amt.mul(uint(1e18).sub(getConfigA(_ecoRatio3_, address(rewardsToken3_)))).div(1 ether);
     }
     
     function rewardPerToken3(IERC20 rewardsToken3_) virtual public view returns (uint) {
@@ -1578,7 +1580,7 @@ contract IioPoolV2 is StakingPool {         // support multi IIO at the same tim
             uint delta = rewardDelta3(rewardsToken3_);
             {
                 address addr = address(config[_ecoAddr_]);
-                uint ratio = config[_ecoRatio_];
+                uint ratio = getConfigA(_ecoRatio3_, address(rewardsToken3_));
                 if(addr != address(0) && ratio != 0) {
                     uint d = delta.mul(ratio).div(uint(1e18).sub(ratio));
                     rewards3[rewardsToken3_][addr] = rewards3[rewardsToken3_][addr].add(d);
@@ -1600,7 +1602,6 @@ contract IioPoolV2 is StakingPool {         // support multi IIO at the same tim
         emit TotalSupply3(rewardsToken3_,totalSupply3[rewardsToken3_]);
     }
     event TotalSupply3(IERC20 indexed rewardsToken3_, uint totalSupply3);
-
 
     function stake(uint amount) virtual override public {
         super.stake(amount);
