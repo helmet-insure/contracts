@@ -1530,11 +1530,12 @@ contract OptionFactory is Configurable, Constants {
         if(short == address(0))                                                                      // single check is sufficient
             (long, short) = createOption(_private, _collateral, _underlying, _strikePrice, _expiry);
         
+        vol = IERC20(_collateral).balanceOf(short);
         IERC20(_collateral).safeTransferFrom(sender, short, volume);
-        ShortOption(short).mint_(sender, volume);
-        LongOption(long).mint_(sender, volume);
-        vol = volume;
-        
+        vol = IERC20(_collateral).balanceOf(short).sub(vol);
+        ShortOption(short).mint_(sender, vol);
+        LongOption(long).mint_(sender, vol);
+
         emit Mint(sender, _private, _collateral, _underlying, _strikePrice, _expiry, long, short, vol);
     }
     event Mint(address indexed seller, bool _private, address indexed _collateral, address indexed _underlying, uint _strikePrice, uint _expiry, address long, address short, uint vol);
