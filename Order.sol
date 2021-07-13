@@ -214,7 +214,7 @@ contract OptionOrder is Configurable, Constants, Constants2 {
         return exercise(bidID, volume, new address[](0));
     }
     function exercise(uint bidID, uint volume, address[] memory path) virtual public returns (uint vol, uint fee, uint amt) {
-        require(bids[bidID].buyer != address(0), 'Nonexistent bid order');
+        require(bids[bidID].buyer == msg.sender, 'Nonexistent or not yours bid order');
         if(volume > bids[bidID].remain)
             volume = bids[bidID].remain;
         bids[bidID].remain = bids[bidID].remain.sub(volume);
