@@ -982,6 +982,11 @@ contract StakingPool is Configurable, StakingRewards {
         }
     }
     
+    function stakeAndCompound(uint amount) virtual public {
+        stake(amount);
+        compound();
+    }
+    
     function compound() virtual public nonReentrant updateReward(msg.sender) {      // only for pool3
         require(getConfigA(_blocklist_, msg.sender) == 0, 'In blocklist');
         bool isContract = msg.sender.isContract();
