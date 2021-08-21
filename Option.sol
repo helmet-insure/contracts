@@ -1591,8 +1591,10 @@ contract OptionFactory is Configurable, Constants {
             IERC20(_underlying).safeTransferFrom(buyer, short, amt);
             (vol, fee) = ShortOption(short).exercise_(buyer, volume);
         } else {
+            revert('Not support path now');
+            require(path[0] == _collateral && path[path.length-1] == _underlying, 'Invalid path');
             (vol, fee) = ShortOption(short).exercise_(address(this), volume);
-            IERC20(_collateral).safeApprove(address(config[_uniswapRounter_]), vol);
+            IERC20(_collateral).approve(address(config[_uniswapRounter_]), vol);
             uint[] memory amounts = IUniswapV2Router01(config[_uniswapRounter_]).swapTokensForExactTokens(amt, vol, path, short, now);
             vol = vol.sub(amounts[0]);
             IERC20(_collateral).safeTransfer(buyer, vol);
