@@ -578,7 +578,9 @@ library SafeERC20 {
         _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
     }
 
-    function safeApprove_(IERC20 token, address spender, uint256 value) internal {
+    function safeApprove2(IERC20 token, address spender, uint256 value) internal {
+        if((value != 0) && (token.allowance(address(this), spender) != 0))
+            _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, 0));
         _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
     }
 
@@ -1598,7 +1600,7 @@ contract OptionFactory is Configurable, Constants {
             revert('Not support path now');
             require(path[0] == _collateral && path[path.length-1] == _underlying, 'Invalid path');
             (vol, fee) = ShortOption(short).exercise_(address(this), volume);
-            IERC20(_collateral).safeApprove_(address(config[_uniswapRounter_]), vol);
+            IERC20(_collateral).safeApprove2(address(config[_uniswapRounter_]), vol);
             uint[] memory amounts = IUniswapV2Router01(config[_uniswapRounter_]).swapTokensForExactTokens(amt, vol, path, short, now);
             vol = vol.sub(amounts[0]);
             IERC20(_collateral).safeTransfer(buyer, vol);
